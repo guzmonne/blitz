@@ -1,0 +1,136 @@
+version: '3'
+
+services:
+  traefik:
+    image: traefik:2.3
+    container_name: traefik
+    command:
+      - "--log.level=ERROR"
+      - "--api.insecure=true"
+      - "--providers.docker"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.httpsresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.httpsresolver.acme.email=${EMAIL}"
+      - "--certificatesresolvers.httpsresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "/var/local/blitz/traefik/letsencrypt:/letsencrypt"
+  emby:
+    image: emby/embyserver:latest
+    container_name: emby
+    volumes:
+      - /var/local/blitz/emby:/config
+      - /data:/mnt/share1
+    devices:
+      - /dev/dri:/dev/dri
+    environment:
+      - UID=1000
+      - GID=100
+      - GIDLIST=100
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.emby.rule=Host(`emby.${DOMAIN}`)"
+      - "traefik.http.routers.emby.entrypoints=websecure"
+      - "traefik.http.routers.emby.tls.certresolver=httpsresolver"
+      - "traefik.http.services.emby.loadbalancer.server.port=8096"
+  sabnzbd:
+    image: linuxserver/sabnzbd
+    container_name: sabnzbd
+    restart: unless-stopped
+    volumes:
+      - /var/local/blitz/sabnzbd:/config
+      - /data/downloads:/downloads
+      - /data/incomplete:/incomplete-downloads
+      - /data/watched:/downloads/watched
+      - /data/scripts:/downloads/scripts
+    environment:
+      - PUID=0
+      - PGID=0
+      - TZ=Americas/Montevideo
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sabnzbd.rule=Host(`sabnzbd.${DOMAIN}`)"
+      - "traefik.http.routers.sabnzbd.entrypoints=websecure"
+      - "traefik.http.routers.sabnzbd.tls.certresolver=httpsresolver"
+  couchpotato:
+    image: linuxserver/couchpotato
+    container_name: couchpotato
+    restart: unless-stopped
+    environment:
+      - PUID=0
+      - PGID=0
+      - TZ=Americas/Montevideo
+      - UMASK_SET=022
+    volumes:
+      - /var/local/blitz/couchpotato:/config
+      - /data/Movies:/movies
+      - /data/downloads:/downloads
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.couchpotato.rule=Host(`couchpotato.${DOMAIN}`)"
+      - "traefik.http.routers.couchpotato.entrypoints=websecure"
+      - "traefik.http.routers.couchpotato.tls.certresolver=httpsresolver"
+  sonarr:
+    image: linuxserver/sonarr:preview
+    container_name: sonarr
+    restart: unless-stopped
+    environment:
+      - PUID=0
+      - PGID=0
+      - TZ=Americas/Montevideo
+      - UMASK_SET=022
+    volumes:
+      - /var/local/blitz/sonarr:/config
+      - /data/TV:/tv
+      - /data/downloads:/downloads
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sonarr.rule=Host(`sonarr.${DOMAIN}`)"
+      - "traefik.http.routers.sonarr.entrypoints=websecure"
+      - "traefik.http.routers.sonarr.tls.certresolver=httpsresolver"
+  transmission:
+    image: linuxserver/transmission
+    container_name: transmission
+    environment:
+      - PUID=0
+      - PGID=0
+      - TZ=Americas/Montevideo
+      - TRANSMISSION_WEB_HOME=/combustion-release/
+      - USER=${TRANSMISSION_USER}
+      - PASS=${TRANSMISSION_PASS}
+    volumes:
+      - /var/local/blitz/transmission:/config
+      - /data/downloads:/downloads
+      - /dara/downloads/watch:/watch
+    ports:
+      - 51413:51413
+      - 51413:51413/udp
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.transmission.rule=Host(`transmission.${DOMAIN}`)"
+      - "traefik.http.routers.transmission.entrypoints=websecure"
+      - "traefik.http.routers.transmission.tls.certresolver=httpsresolver"
+      - "traefik.http.services.transmission.loadbalancer.server.port=9091"
+  jackett:
+    image: ghcr.io/linuxserver/jackett:development
+    container_name: jackett
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Americas/Montevideo
+      - AUTO_UPDATE=false
+    volumes:
+      - /var/local/blitz/jackett:/config
+      - /data/downloads/watch:/downloads
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jackett.rule=Host(`jackett.${DOMAIN}`)"
+      - "traefik.http.routers.jackett.entrypoints=websecure"
+      - "traefik.http.routers.jackett.tls.certresolver=httpsresolver"
